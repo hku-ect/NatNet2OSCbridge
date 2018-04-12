@@ -252,6 +252,12 @@ void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle)
         // we use getRigidBodyDescriptions() together with natnet.getRigidBodyAt(i)
         // because the natnet.getRigidBodyAt(i) does not have the name of th erigidbody in natnet version 2.9.0.0
         // We use the rbd.size() to loop and not the natnet.getNumRigidBody()
+        if ( natnet.getNumRigidBody() != rbd.size() ) {
+
+            ofLogError() << "Race condition ahead!!! getNumRigidBody() != rdb.size. Skiping getRigidBodies request";
+            return;
+        }
+
         for (int i = 0; i < rbd.size(); i++)
         {
             const ofxNatNet::RigidBody &RB = natnet.getRigidBodyAt(i);
@@ -399,7 +405,12 @@ void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle)
 void ofApp::getSkeletons(client *c, ofxOscBundle *bundle)
 {
     vector<ofxNatNet::SkeletonDescription> sd = natnet.getSkeletonDescriptions();
-    
+    if ( ! sd.size() )
+    {
+        ofLogError() << "No SkeletonDesctiptions found!!!";
+        return;
+    }
+
     for (int j = 0; j < natnet.getNumSkeleton(); j++)
     {
         const ofxNatNet::Skeleton &S = natnet.getSkeletonAt(j);
