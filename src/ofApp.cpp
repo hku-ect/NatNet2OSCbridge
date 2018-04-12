@@ -25,6 +25,7 @@ void ofApp::setup()
     
     setupConnectionInterface();
     setupData();
+    sentRequest = false;
     visible = true;
     numRigidBody = 0;
     numSkeleton = 0;
@@ -34,6 +35,7 @@ void ofApp::setup()
     skeletonSize = -1;
     connected = false;
     invFPS = 1.0f / ofToInt(fps.getText());
+    FPS = ofToInt(fps.getText());
     
    
 }
@@ -56,8 +58,6 @@ void ofApp::setupConnectionInterface(){
     newIP.setup(ofRectangle(InterfaceX, InterfaceY+200, 140, 20), 10, "127.0.0.1","Client IP");
     newPort.setup(ofRectangle(InterfaceX, InterfaceY+230, 140, 20), 10, "6200","Client Port");
 
-
-    
 }
 
 void ofApp::setupData()
@@ -122,6 +122,11 @@ void ofApp::update()
 {
     if(running && natnet.isConnected())
     {
+        // get Natnet info for changes
+        if(sentRequest == false || ofGetFrameNum()%FPS == 1){
+            natnet.sendRequestDescription();
+            sentRequest = true;
+        }
         natnet.update();
         sendOSC();
     }
@@ -182,6 +187,7 @@ void ofApp::draw()
         
         ofSetColor(255);
         ofDrawBitmapString(info, InterfaceX, InterfaceY+390);
+        
     }
 }
 
@@ -194,35 +200,6 @@ void ofApp::addClient(int i,string ip,int p,string n,bool r,bool m,bool s, bool 
 
 void ofApp::sendOSC()
 {
-    //set to false if number of skels/rb's needs updating
-    bool rigidbodiesReady = true;
-    bool skeletonsReady = true;
-    bool sentRequest = false;
-    
-    // get & check rigidbodies size
-    vector<ofxNatNet::RigidBodyDescription> rbd = natnet.getRigidBodyDescriptions();
-    int size = rbd.size();
-    // set rigidBodySize to numbe rof rigidbodies we get from natnet.
-    rigidBodySize = natnet.getNumRigidBody();
-    // if there is a difference do natnet.sendRequestDescription(); to get up to date rigidbodie descriptions and thus names
-    if (size != rigidBodySize)
-    {
-        natnet.sendRequestDescription();
-        rigidBodySize = size;
-        rigidbodiesReady = false;
-        sentRequest = true;
-    }
-    
-    //get & check skeletons size
-    vector<ofxNatNet::SkeletonDescription> sd = natnet.getSkeletonDescriptions();
-    size = sd.size();
-    if (size != skeletonSize)
-    {
-        if ( !sentRequest ) natnet.sendRequestDescription();
-        skeletonSize = size;
-        skeletonsReady = false;
-    }
-    
     for( int i = 0; i < clients.size(); ++i )
     {
         ofxOscBundle bundle;
@@ -232,12 +209,12 @@ void ofApp::sendOSC()
             getMarkers( clients[i], &bundle );
         
         //rigidbodies
-        if ( rigidbodiesReady && clients[i]->getRigid() )
-            getRigidbodies( clients[i], &bundle, rbd );
+        if ( clients[i]->getRigid() )
+            getRigidbodies( clients[i], &bundle);
         
         //skeletons
-        if ( skeletonsReady && clients[i]->getSkeleton() )
-            getSkeletons( clients[i], &bundle, sd );
+        if ( clients[i]->getSkeleton() )
+            getSkeletons( clients[i], &bundle);
         
         //check if not empty & send
         if ( bundle.getMessageCount() > 0 )
@@ -266,13 +243,22 @@ void ofApp::getMarkers(client *c, ofxOscBundle *bundle)
     }
 }
 
-void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle, vector<ofxNatNet::RigidBodyDescription> rbd )
+void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle)
 {
     if ( c->getRigid() )
     {
+        vector<ofxNatNet::RigidBodyDescription> rbd = natnet.getRigidBodyDescriptions();
+        
         // we use getRigidBodyDescriptions() together with natnet.getRigidBodyAt(i)
         // because the natnet.getRigidBodyAt(i) does not have the name of th erigidbody in natnet version 2.9.0.0
-        for (int i = 0; i < natnet.getNumRigidBody(); i++)
+        // We use the rbd.size() to loop and not the natnet.getNumRigidBody()
+        if ( natnet.getNumRigidBody() != rbd.size() ) {
+
+            ofLogError() << "Race condition ahead!!! getNumRigidBody() != rdb.size. Skiping getRigidBodies request";
+            return;
+        }
+
+        for (int i = 0; i < rbd.size(); i++)
         {
             const ofxNatNet::RigidBody &RB = natnet.getRigidBodyAt(i);
             
@@ -416,8 +402,15 @@ void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle, vector<ofxNatNet::Ri
     }
 }
 
-void ofApp::getSkeletons(client *c, ofxOscBundle *bundle, vector<ofxNatNet::SkeletonDescription> sd)
+void ofApp::getSkeletons(client *c, ofxOscBundle *bundle)
 {
+    vector<ofxNatNet::SkeletonDescription> sd = natnet.getSkeletonDescriptions();
+    if ( ! sd.size() )
+    {
+        ofLogError() << "No SkeletonDesctiptions found!!!";
+        return;
+    }
+
     for (int j = 0; j < natnet.getNumSkeleton(); j++)
     {
         const ofxNatNet::Skeleton &S = natnet.getSkeletonAt(j);
@@ -598,6 +591,7 @@ void ofApp::keyPressed(int key)
         running = !running;
         if (running) natnet.sendRequestDescription();
     }
+    
 }
 
 //--------------------------------------------------------------

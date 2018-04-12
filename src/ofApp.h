@@ -60,10 +60,10 @@ private:
     void                    sendAllSkeletons();
     
     void                    getMarkers(         client *c, ofxOscBundle *bundle );
-    void                    getRigidbodies(     client *c, ofxOscBundle *bundle,
-                                                    vector<ofxNatNet::RigidBodyDescription> rbd );
-    void                    getSkeletons(       client *c, ofxOscBundle *bundle,
-                                                    vector<ofxNatNet::SkeletonDescription> sd );
+ 
+    void                    getRigidbodies(     client *c, ofxOscBundle *bundle );
+
+    void                    getSkeletons(       client *c, ofxOscBundle *bundle );
     
     void                    fixRanges( ofVec3f *euler );
     ofVec3f                 shortestRotation( ofVec3f euler );
@@ -77,6 +77,7 @@ private:
     
     bool                visible;
     bool                connected;
+    bool                sentRequest;
     int                 numRigidBody;
     int                 numSkeleton;
     bool                running;
@@ -101,4 +102,5 @@ private:
     ofxTextButton       connect;
     
     float               invFPS;
+    int                 FPS;
 };
