@@ -123,6 +123,7 @@ void ofApp::update()
     if(running && natnet.isConnected())
     {
         natnet.update();
+        if ( ! (ofGetFrameNum() % 60) ) natnet.sendRequestDescription();
         sendOSC();
     }
     if(natnet.isConnected()) connected = true;
@@ -272,146 +273,157 @@ void ofApp::getRigidbodies(client *c, ofxOscBundle *bundle, vector<ofxNatNet::Ri
     {
         // we use getRigidBodyDescriptions() together with natnet.getRigidBodyAt(i)
         // because the natnet.getRigidBodyAt(i) does not have the name of th erigidbody in natnet version 2.9.0.0
-        for (int i = 0; i < natnet.getNumRigidBody(); i++)
+        // NEW: loop through GetRigidBodyDescriptions and use the found ID to retrieve RigidBody
+        vector<ofxNatNet::RigidBodyDescription> rbdescs = natnet.getRigidBodyDescriptions();
+        vector<ofxNatNet::RigidBodyDescription>::iterator it;
+        for ( it = rbdescs.begin(); it != rbdescs.end(); ++it )
         {
-            const ofxNatNet::RigidBody &RB = natnet.getRigidBodyAt(i);
-            
-            // Get the matirx
-            ofMatrix4x4 matrix = RB.matrix;
-            
-            // Decompose to get the different elements
-            ofVec3f position;
-            ofQuaternion rotation;
-            ofVec3f scale;
-            ofQuaternion so;
-            matrix.decompose(position, rotation, scale, so);
-            
-            //we're going to fetch or create this
-            RigidBodyHistory *rb;
-            
-            //Get or create rigidbodyhistory
-            bool found = false;
-            for( int r = 0; r < rbHistory.size(); ++r )
+            // get rb id
+            ofxNatNet::RigidBody RB; // = new ofxNatNet::RigidBody();
+            // retrieve rb from map
+            if ( natnet.getRigidBody(it->id, RB) )
             {
-                if ( rbHistory[r].rigidBodyId == rbd[i].id )
+                // Get the matirx
+                ofMatrix4x4 matrix = RB.matrix;
+
+                // Decompose to get the different elements
+                ofVec3f position;
+                ofQuaternion rotation;
+                ofVec3f scale;
+                ofQuaternion so;
+                matrix.decompose(position, rotation, scale, so);
+
+                //we're going to fetch or create this
+                RigidBodyHistory *rb;
+
+                //Get or create rigidbodyhistory
+                bool found = false;
+                for( int r = 0; r < rbHistory.size(); ++r )
                 {
-                    rb = &rbHistory[r];
-                    found = true;
+                    if ( rbHistory[r].rigidBodyId == it->id )
+                    {
+                        rb = &rbHistory[r];
+                        found = true;
+                    }
                 }
-            }
-            
-            if ( !found )
-            {
-                rb = new RigidBodyHistory( rbd[i].id, position, rotation );
-                rbHistory.push_back(*rb);
-            }
-            
-            //if objects are not tracked, move them to a galaxy far far away
-            // this has been removed in favour of just sending an isActive to clients
-            /*
-            if ( !RB.isActive() ) {
-                rb->framesInactive++;
-                if ( rb->framesInactive > 120 ) {
-                    position.x += 1000;
-                    position.y += 1000;
-                    position.z += 1000;
-                }
-            }
-            else {
-                rb->framesInactive = 0;
-            }
-             */
-            
-            ofVec3f velocity;
-            ofVec3f angularVelocity;
-            
-            if ( rb->firstRun == TRUE )
-            {
-                rb->currentDataPoint = 0;
-                rb->firstRun = FALSE;
-            }
-            else
-            {
-                if ( rb->currentDataPoint < 2 * SMOOTHING + 1 )
+
+                if ( !found )
                 {
-                    rb->velocities[rb->currentDataPoint] = ( position - rb->previousPosition ) * invFPS;
-                    
-                    ofVec3f diff = ( rb->previousOrientation * rotation.inverse() ).getEuler();
-                    rb->angularVelocities[rb->currentDataPoint] = ( diff * invFPS );
-                    
-                    rb->currentDataPoint++;
+                    rb = new RigidBodyHistory( it->id, position, rotation );
+                    rbHistory.push_back(*rb);
+                }
+
+                //if objects are not tracked, move them to a galaxy far far away
+                // this has been removed in favour of just sending an isActive to clients
+                /*
+                if ( !RB.isActive() ) {
+                    rb->framesInactive++;
+                    if ( rb->framesInactive > 120 ) {
+                        position.x += 1000;
+                        position.y += 1000;
+                        position.z += 1000;
+                    }
+                }
+                else {
+                    rb->framesInactive = 0;
+                }
+                 */
+
+                ofVec3f velocity;
+                ofVec3f angularVelocity;
+
+                if ( rb->firstRun == TRUE )
+                {
+                    rb->currentDataPoint = 0;
+                    rb->firstRun = FALSE;
                 }
                 else
                 {
-                    int count = 0;
-                    int maxDist = SMOOTHING;
-                    ofVec3f totalVelocity;
-                    ofVec3f totalAngularVelocity;
-                    //calculate smoothed velocity
-                    for( int x = 0; x < SMOOTHING * 2 + 1; ++x )
+                    if ( rb->currentDataPoint < 2 * SMOOTHING + 1 )
                     {
-                        //calculate integer distance from "center"
-                        //above - maxDist = influence of data point
-                        int dist = abs( x - SMOOTHING );
-                        int infl = ( maxDist - dist ) + 1;
-                        
-                        //add all
-                        totalVelocity += rb->velocities[x] * infl;
-                        totalAngularVelocity += rb->angularVelocities[x] * infl;
-                        //count "influences"
-                        count += infl;
+                        rb->velocities[rb->currentDataPoint] = ( position - rb->previousPosition ) * invFPS;
+
+                        ofVec3f diff = ( rb->previousOrientation * rotation.inverse() ).getEuler();
+                        rb->angularVelocities[rb->currentDataPoint] = ( diff * invFPS );
+
+                        rb->currentDataPoint++;
                     }
-                    
-                    //divide by total data point influences
-                    velocity = totalVelocity / count;
-                    angularVelocity = totalAngularVelocity / count;
-                    
-                    for( int x = 0; x < rb->currentDataPoint - 1; ++x )
+                    else
                     {
-                        rb->velocities[x] = rb->velocities[x+1];
-                        rb->angularVelocities[x] = rb->angularVelocities[x+1];
+                        int count = 0;
+                        int maxDist = SMOOTHING;
+                        ofVec3f totalVelocity;
+                        ofVec3f totalAngularVelocity;
+                        //calculate smoothed velocity
+                        for( int x = 0; x < SMOOTHING * 2 + 1; ++x )
+                        {
+                            //calculate integer distance from "center"
+                            //above - maxDist = influence of data point
+                            int dist = abs( x - SMOOTHING );
+                            int infl = ( maxDist - dist ) + 1;
+
+                            //add all
+                            totalVelocity += rb->velocities[x] * infl;
+                            totalAngularVelocity += rb->angularVelocities[x] * infl;
+                            //count "influences"
+                            count += infl;
+                        }
+
+                        //divide by total data point influences
+                        velocity = totalVelocity / count;
+                        angularVelocity = totalAngularVelocity / count;
+
+                        for( int x = 0; x < rb->currentDataPoint - 1; ++x )
+                        {
+                            rb->velocities[x] = rb->velocities[x+1];
+                            rb->angularVelocities[x] = rb->angularVelocities[x+1];
+                        }
+                        rb->velocities[rb->currentDataPoint-1] = ( position - rb->previousPosition ) * invFPS;
+
+                        ofVec3f diff = ( rb->previousOrientation * rotation.inverse() ).getEuler();
+                        rb->angularVelocities[rb->currentDataPoint-1] = ( diff * invFPS );
                     }
-                    rb->velocities[rb->currentDataPoint-1] = ( position - rb->previousPosition ) * invFPS;
-                    
-                    ofVec3f diff = ( rb->previousOrientation * rotation.inverse() ).getEuler();
-                    rb->angularVelocities[rb->currentDataPoint-1] = ( diff * invFPS );
+
+                    rb->previousPosition = position;
+                    rb->previousOrientation = rotation;
                 }
-                
-                rb->previousPosition = position;
-                rb->previousOrientation = rotation;
+
+                ofxOscMessage m;
+                m.addIntArg(RB.id);
+                m.addStringArg(ofToString(it->name));
+                m.addFloatArg(position.x);
+                m.addFloatArg(position.y);
+                m.addFloatArg(position.z);
+                m.addFloatArg(rotation.x());
+                m.addFloatArg(rotation.y());
+                m.addFloatArg(rotation.z());
+                m.addFloatArg(rotation.w());
+
+                if ( c->getMode() != ClientMode_GearVR )
+                {
+                    //velocity over SMOOTHING * 2 + 1 frames
+                    m.addFloatArg(velocity.x * 1000);
+                    m.addFloatArg(velocity.y * 1000);
+                    m.addFloatArg(velocity.z * 1000);
+                    //angular velocity (euler), also smoothed
+                    m.addFloatArg(angularVelocity.x * 1000);
+                    m.addFloatArg(angularVelocity.y * 1000);
+                    m.addFloatArg(angularVelocity.z * 1000);
+                }
+
+                m.addIntArg( ( RB.isActive() ? 1 : 0 ) );
+
+                if ( c->getHierarchy())
+                    m.setAddress("/rigidBody/"+ofToString(it->name));
+                else
+                    m.setAddress("/rigidBody");
+
+                bundle->addMessage(m);
             }
-            
-            ofxOscMessage m;
-            m.addIntArg(RB.id);
-            m.addStringArg(ofToString(rbd[i].name));
-            m.addFloatArg(position.x);
-            m.addFloatArg(position.y);
-            m.addFloatArg(position.z);
-            m.addFloatArg(rotation.x());
-            m.addFloatArg(rotation.y());
-            m.addFloatArg(rotation.z());
-            m.addFloatArg(rotation.w());
-            
-            if ( c->getMode() != ClientMode_GearVR )
-            {
-                //velocity over SMOOTHING * 2 + 1 frames
-                m.addFloatArg(velocity.x * 1000);
-                m.addFloatArg(velocity.y * 1000);
-                m.addFloatArg(velocity.z * 1000);
-                //angular velocity (euler), also smoothed
-                m.addFloatArg(angularVelocity.x * 1000);
-                m.addFloatArg(angularVelocity.y * 1000);
-                m.addFloatArg(angularVelocity.z * 1000);
-            }
-            
-            m.addIntArg( ( RB.isActive() ? 1 : 0 ) );
-            
-            if ( c->getHierarchy())
-                m.setAddress("/rigidBody/"+ofToString(rbd[i].name));
             else
-                m.setAddress("/rigidBody");
-            
-            bundle->addMessage(m);
+            {
+                ofLogWarning() << "RB with ID " << it->id << " not found!";
+            }
         }
     }
 }
