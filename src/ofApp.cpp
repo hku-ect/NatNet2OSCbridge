@@ -168,13 +168,13 @@ void ofApp::draw()
         font.drawString("Informations", InterfaceX, InterfaceY+370);
         
         string info;
-        info += "natnet tracking informations: \n";
+        info += "natnet tracking information: \n";
         info += "frames: " + ofToString(natnet.getFrameNumber()) + "\n";
-        info += "data rate: " + ofToString(natnet.getDataRate()) + "\n";
+        info += "data rate: " + ofToString(natnet.getDataRate()) + " fps\n";
         info += string("connected: ") + (natnet.isConnected() ? "YES" : "NO") + "\n";
         info += "num markers set: " + ofToString(natnet.getNumMarkersSet()) + "\n";
         info += "num marker: " + ofToString(natnet.getNumMarker()) + "\n";
-        info += "num filterd (non regidbodies) marker: " +
+        info += "num filtered (non rigidbodies) marker: " +
         ofToString(natnet.getNumFilterdMarker()) + "\n";
         info += "num rigidbody: " + ofToString(natnet.getNumRigidBody()) + "\n";
         info += "num skeleton: " + ofToString(natnet.getNumSkeleton()) + "\n";
