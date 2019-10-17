@@ -225,6 +225,7 @@ install:
   - cd ~/openFrameworks/addons
   - git clone --depth=1 https://github.com/hku-ect/ofxNatNet.git
   - git clone --depth=1 https://github.com/jvcleave/ofxImGui.git
+  - git clone --depth=1 --branch=msys2 https://github.com/sphaero/ofxOpenVRTracker.git
 
 script:
 #  - scripts/ci/addons/build.sh
