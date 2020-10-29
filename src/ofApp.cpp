@@ -54,7 +54,7 @@ void ofApp::setup()
     string initialXml = "setup.xml";
     save_fileName = new char[32];
     strcpy(save_fileName, initialXml.c_str());
-
+    
     setupData("");
     visible = true;
     numRigidBody = 0;
@@ -97,7 +97,6 @@ void ofApp::setup()
     ofAddListener(openvr.newDataReceived, this, &ofApp::newDeviceData);
 #endif
     numConnectedVRTrackers = 0;
-
     
 }
 
@@ -1285,11 +1284,27 @@ void ofApp::doGui() {
             ImGui::Text("App Version:"); ImGui::NextColumn();
             ImGui::TextWrapped( VERSION ); ImGui::NextColumn();
 
+            //FIXME: extend this with: build info (same way as app version), gebruikte libraries info, addons
             ImGui::Text("OS details:"); ImGui::NextColumn();
             string osdet = run_method("helpers", "platform_details").c_str();
+            // https://www.khronos.org/opengl/wiki/OpenGL_Context
+            osdet += "OpenGL information:\n";
+            osdet += "Renderer: "+ofToString(glGetString(GL_RENDERER))+"\n";
+            osdet += "Vendor: "+ofToString(glGetString(GL_VENDOR))+"\n";
+            osdet += "Version: "+ofToString(glGetString(GL_VERSION))+"\n";
+            osdet += "GLSL version: "+ofToString(glGetString(GL_SHADING_LANGUAGE_VERSION))+"\n";
+            osdet += "GL extensions: "+	ofToString( glGetString(GL_EXTENSIONS))+"\n";
             ImGui::InputTextMultiline("##osdetails", (char *)osdet.c_str(), osdet.length(), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 16), ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_ReadOnly);
             ImGui::NextColumn();
-
+            
+            ImGui::Text("Path details:"); ImGui::NextColumn();
+            string pdet = "Working directory: "+ofToString(ofFilePath::getCurrentWorkingDirectory())+"\n";
+            pdet += "OpenFrameWorks version: "+ofToString(ofGetVersionInfo())+"\n";
+            pdet += "Paths: "+ofToString(ofGetEnv("PATH"));
+            
+            ImGui::InputTextMultiline("##pathdetails", (char *)pdet.c_str(), pdet.length(), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 4), ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_ReadOnly);
+            ImGui::NextColumn();
+            
             ImGui::Text("Python details"); ImGui::NextColumn();
             string pydet = run_method("helpers", "python_details").c_str();
             ImGui::InputTextMultiline("##pydetails", (char *)pydet.c_str(), pydet.length(), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 8), ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_ReadOnly);
